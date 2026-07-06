@@ -65,6 +65,10 @@ MINIO_ROOT_PASSWORD=MinioSecretPassword2026!
 # Versions
 AIRFLOW_VERSION=2.9.2
 POSTGRES_VERSION=16
+
+# Configuration d'Apache Airflow Admin
+AIRFLOW_ADMIN_USER=admin
+AIRFLOW_ADMIN_PASSWORD=admin
 ```
 
 ### 3. Démarrage de l'Infrastructure

@@ -25,7 +25,7 @@ default_args = {
 def execute_ingestion(filename, table_name):
     """Fonction Python exécutée par Airflow pour charger un CSV"""
     # Chemin absolu partagé ou local dans le conteneur Airflow
-    data_folder = "/opt/airflow/dags/csv" 
+    data_folder = "/opt/airflow/dags" 
     file_path = os.path.join(data_folder, filename)
     
     if not os.path.exists(file_path):

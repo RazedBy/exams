@@ -73,6 +73,9 @@ services:
       - LOAD_EXHAUSTIVE_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - AIRFLOW_ADMIN_USER=${AIRFLOW_ADMIN_USER}
+      - AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
     ports:
       - "8080:8080"
     volumes:
@@ -82,7 +85,7 @@ services:
       - postgres
     networks:
       - indusflow_net
-    command: bash -c "airflow db migrate && airflow webserver"
+    command: bash -c "airflow db migrate && airflow users create --username ${AIRFLOW_ADMIN_USER} --firstname Admin --lastname Admin --role Admin --email admin@example.com --password ${AIRFLOW_ADMIN_PASSWORD} || true && airflow webserver"
     restart: always
 
   # --- APACHE AIRFLOW : LE PLANIFICATEUR (SCHEDULER) ---
@@ -93,6 +96,7 @@ services:
       - LOAD_EXHAUSTIVE_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - AIRFLOW_CONN_POSTGRES_DEFAULT=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
       - ./dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
