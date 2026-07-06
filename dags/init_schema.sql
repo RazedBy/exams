@@ -1,3 +1,19 @@
+-- DROP TABLES to allow clean re-runs
+DROP TABLE IF EXISTS logs_jobs_airflow CASCADE;
+DROP TABLE IF EXISTS alertes_monitoring CASCADE;
+DROP TABLE IF EXISTS acces_utilisateurs CASCADE;
+DROP TABLE IF EXISTS maintenance_machines CASCADE;
+DROP TABLE IF EXISTS pieces_detachees CASCADE;
+DROP TABLE IF EXISTS planning_production CASCADE;
+DROP TABLE IF EXISTS logs_erreurs_machines CASCADE;
+DROP TABLE IF EXISTS cameras_qualite CASCADE;
+DROP TABLE IF EXISTS capteurs_machines CASCADE;
+DROP TABLE IF EXISTS etapes_fabrication CASCADE;
+DROP TABLE IF EXISTS cycles_production CASCADE;
+DROP TABLE IF EXISTS clients_industriels CASCADE;
+DROP TABLE IF EXISTS produits CASCADE;
+DROP TABLE IF EXISTS usines CASCADE;
+
 -- ==========================================
 -- 1. TABLES DE DIMENSIONS (RÉFÉRENTIELS)
 -- ==========================================
@@ -139,3 +155,36 @@ CREATE TABLE IF NOT EXISTS logs_jobs_airflow (
     status VARCHAR(50), -- success, failed, retry, etc.
     rows_processed DECIMAL(12, 2)
 );
+
+-- ==========================================
+-- 5. RÔLES ET PERMISSIONS (SÉCURITÉ C3.3)
+-- ==========================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'indusflow_data_engineer') THEN
+        CREATE ROLE indusflow_data_engineer;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'indusflow_analyst') THEN
+        CREATE ROLE indusflow_analyst;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'indusflow_manager') THEN
+        CREATE ROLE indusflow_manager;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'indusflow_ops') THEN
+        CREATE ROLE indusflow_ops;
+    END IF;
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'indusflow_auditor') THEN
+        CREATE ROLE indusflow_auditor;
+    END IF;
+END
+$$;
+
+-- Privilèges DATA_ENGINEER : Lecture/Écriture complète sur public
+GRANT USAGE ON SCHEMA public TO indusflow_data_engineer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO indusflow_data_engineer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO indusflow_data_engineer;
+
+-- Privilèges ANALYST, MANAGER, OPS, AUDITOR : Lecture seule
+GRANT USAGE ON SCHEMA public TO indusflow_analyst, indusflow_manager, indusflow_ops, indusflow_auditor;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO indusflow_analyst, indusflow_manager, indusflow_ops, indusflow_auditor;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO indusflow_analyst, indusflow_manager, indusflow_ops, indusflow_auditor;

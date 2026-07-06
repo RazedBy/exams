@@ -16,7 +16,7 @@ tables = [
     "etapes_fabrication", "capteurs_machines", "cameras_qualite",
     "logs_erreurs_machines", "planning_production", "pieces_detachees",
     "maintenance_machines", "acces_utilisateurs", "alertes_monitoring",
-    "logs_jobs_airflow"
+    "logs_jobs_airflow", "spark_sensor_aggregates", "spark_error_aggregates"
 ]
 
 print("--- BILAN DE LA VOLUMÉTRIE DE L'ENTREPÔT ---")

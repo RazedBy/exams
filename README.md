@@ -116,3 +116,30 @@ python verify_ingest.py
 *   **Console MinIO** : `http://localhost:9001` (Console) / `http://localhost:9000` (API S3)
 *   **Spark Master UI** : `http://localhost:8081`
 *   **Base de Données PostgreSQL** : accessible sur `localhost:5432` avec les identifiants configurés dans le fichier `.env`.
+
+---
+
+## 🔒 Sécurité et Rôles (C3.3)
+
+Les rôles d'accès à la base de données PostgreSQL sont créés automatiquement lors de l'initialisation du schéma :
+*   `indusflow_data_engineer` : Droits de lecture/écriture complets sur le schéma public.
+*   `indusflow_analyst`, `indusflow_manager`, `indusflow_ops`, `indusflow_auditor` : Accès en lecture seule sur les tables de l'entrepôt.
+
+---
+
+## 🌐 Stratégie Multi-Environnements & DRP (C3.2 / C3.8)
+
+### 1. Séparation des Environnements
+Pour isoler les développements de la production :
+*   **Développement (Dev)** : Docker local exécuté par chaque Data Engineer.
+*   **Staging** : Déploiement Kubernetes ou VM de test pour valider l'orchestration sur des volumes réels.
+*   **Production** : Déploiement isolé avec base PostgreSQL managée (ex: AWS RDS) et clés de chiffrement KMS.
+
+### 2. Plan de Reprise d'Activité (DRP / Plan de Maintenance)
+*   **Sauvegardes** : Un script de sauvegarde automatique est fourni à la racine ([backup_postgres.sh](file:///Users/leo/src/exams/backup_postgres.sh)). Il génère un dump logique compressé de la base de données et réalise une rotation automatique (conservation des 7 dernières sauvegardes).
+*   **Restauration** : En cas de panne majeure de la base :
+    ```bash
+    docker exec -i indusflow_postgres psql -U indusflow_admin -d indusflow_warehouse < ./backups/indusflow_backup_YYYYMMDD_HHMMSS.sql
+    ```
+*   **Reprise suite à l'arrêt d'un conteneur** : L'utilisation de `restart: always` sur tous les services dans `docker-compose.yml` garantit le redémarrage automatique en cas de plantage temporaire.
+

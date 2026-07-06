@@ -1,1 +1,3 @@
 .env
+dags/__pycache__/
+tasks_infra_deploiement.md

@@ -48,11 +48,17 @@ services:
     container_name: indusflow_spark_master
     environment:
       - SPARK_MODE=master
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
-      - "8081:8081"
+      - "8081:8080"
       - "7077:7077"
+    volumes:
+      - ./dags:/opt/spark/dags
     networks:
       - indusflow_net
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
 
   spark-worker:
     image: apache/spark:3.5.1
@@ -60,10 +66,16 @@ services:
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./dags:/opt/spark/dags
     depends_on:
       - spark-master
     networks:
       - indusflow_net
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   # --- ORCHESTRATION (APACHE AIRFLOW) ---
   airflow-webserver:
@@ -105,4 +117,65 @@ services:
     networks:
       - indusflow_net
     command: scheduler
+    restart: always
+
+  # --- SUPERVISION & MONITORING (GRAFANA) ---
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: indusflow_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - postgres
+    networks:
+      - indusflow_net
+    restart: always
+
+  # --- PROMETHEUS (METRICS COLLECTION) ---
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: indusflow_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - indusflow_net
+    restart: always
+
+  # --- POSTGRES EXPORTER ---
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: indusflow_postgres_exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      - postgres
+    networks:
+      - indusflow_net
+    restart: always
+
+  # --- NODE EXPORTER ---
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: indusflow_node_exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($|/)'
+    networks:
+      - indusflow_net
     restart: always

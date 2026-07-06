@@ -12,6 +12,32 @@ POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "SecurePassword2026!")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "indusflow_warehouse")
 DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres:5432/{POSTGRES_DB}"
 
+def task_failure_alert(context):
+    """Callback appelée lorsqu'une tâche du DAG échoue pour insérer une alerte de monitoring"""
+    from sqlalchemy import create_engine, text
+    import datetime
+    
+    dag_id = context['dag'].dag_id
+    task_id = context['task_instance'].task_id
+    
+    engine = create_engine(DATABASE_URL)
+    with engine.connect() as conn:
+        query = text("""
+            INSERT INTO alertes_monitoring (alert_id, system_name, severity, metric_name, metric_value, resolved, alert_timestamp)
+            VALUES (
+                (SELECT COALESCE(MAX(alert_id), 0) + 1 FROM alertes_monitoring),
+                'airflow',
+                'CRITICAL',
+                'task_failure',
+                1.0,
+                0,
+                :timestamp
+            )
+        """)
+        conn.execute(query, {"timestamp": datetime.datetime.utcnow()})
+        conn.commit()
+    print(f"🚨 Alerte insérée en base suite à l'échec de la tâche {task_id} du DAG {dag_id}.")
+
 # Configuration par défaut du DAG
 default_args = {
     'owner': 'data_engineer',
@@ -20,6 +46,7 @@ default_args = {
     'email_on_failure': False,
     'retries': 2,
     'retry_delay': timedelta(minutes=5),
+    'on_failure_callback': task_failure_alert,
 }
 
 def execute_ingestion(filename, table_name):
@@ -98,6 +125,48 @@ with DAG(
         op_kwargs={'filename': 'logs_erreurs_machines_bloc3_propre.csv', 'table_name': 'logs_erreurs_machines'}
     )
 
+    ingest_cameras = PythonOperator(
+        task_id='ingest_cameras_qualite',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'cameras_qualite_bloc3_propre.csv', 'table_name': 'cameras_qualite'}
+    )
+
+    ingest_planning = PythonOperator(
+        task_id='ingest_planning_production',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'planning_production_bloc3_propre.csv', 'table_name': 'planning_production'}
+    )
+
+    ingest_pieces = PythonOperator(
+        task_id='ingest_pieces_detachees',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'pieces_detachees_bloc3_propre.csv', 'table_name': 'pieces_detachees'}
+    )
+
+    ingest_maintenance = PythonOperator(
+        task_id='ingest_maintenance_machines',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'maintenance_machines_bloc3_propre.csv', 'table_name': 'maintenance_machines'}
+    )
+
+    ingest_acces = PythonOperator(
+        task_id='ingest_acces_utilisateurs',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'acces_utilisateurs.csv', 'table_name': 'acces_utilisateurs'}
+    )
+
+    ingest_alertes = PythonOperator(
+        task_id='ingest_alertes_monitoring',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'alertes_monitoring.csv', 'table_name': 'alertes_monitoring'}
+    )
+
+    ingest_logs_jobs = PythonOperator(
+        task_id='ingest_logs_jobs_airflow',
+        python_callable=execute_ingestion,
+        op_kwargs={'filename': 'logs_jobs_airflow.csv', 'table_name': 'logs_jobs_airflow'}
+    )
+
     # --- STRUCTURE DE DÉPENDANCE DU PIPELINE ---
     # Étape 1 : Initialisation
     # Étape 2 : Dimensions en parallèle
@@ -107,4 +176,15 @@ with DAG(
     [ingest_usines, ingest_produits, ingest_clients] >> ingest_cycles
     
     # Étape 4 : Les faits structurent le reste des tables opérationnelles rattachées
-    ingest_cycles >> [ingest_etapes, ingest_capteurs, ingest_erreurs]
+    ingest_cycles >> [
+        ingest_etapes,
+        ingest_capteurs,
+        ingest_erreurs,
+        ingest_cameras,
+        ingest_planning,
+        ingest_pieces,
+        ingest_maintenance,
+        ingest_acces,
+        ingest_alertes,
+        ingest_logs_jobs
+    ]
