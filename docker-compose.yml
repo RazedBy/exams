@@ -1,0 +1,104 @@
+networks:
+  indusflow_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  airflow_logs:
+
+services:
+  # --- ENTREPÔT DE DONNÉES (POSTGRESQL) ---
+  postgres:
+    image: postgres:${POSTGRES_VERSION}-alpine
+    container_name: indusflow_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_schema.sql:/docker-entrypoint-initdb.d/init_schema.sql
+    networks:
+      - indusflow_net
+    restart: always
+
+  # --- STOCKAGE BRUT / STAGING (MINIO) ---
+  minio:
+    image: minio/minio:latest
+    container_name: indusflow_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - indusflow_net
+    restart: always
+
+  # --- CALCUL DISTRIBUÉ (SPARK MASTER) ---
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: indusflow_spark_master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8081:8081"
+      - "7077:7077"
+    networks:
+      - indusflow_net
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    container_name: indusflow_spark_worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    networks:
+      - indusflow_net
+
+  # --- ORCHESTRATION (APACHE AIRFLOW) ---
+  airflow-webserver:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: indusflow_airflow_webserver
+    environment:
+      - LOAD_EXHAUSTIVE_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      - postgres
+    networks:
+      - indusflow_net
+    command: bash -c "airflow db migrate && airflow webserver"
+    restart: always
+
+  # --- APACHE AIRFLOW : LE PLANIFICATEUR (SCHEDULER) ---
+  airflow-scheduler:
+    image: apache/airflow:${AIRFLOW_VERSION}
+    container_name: indusflow_airflow_scheduler
+    environment:
+      - LOAD_EXHAUSTIVE_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      - postgres
+    networks:
+      - indusflow_net
+    command: scheduler
+    restart: always
