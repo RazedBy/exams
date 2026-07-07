@@ -69,6 +69,10 @@ POSTGRES_VERSION=16
 # Configuration d'Apache Airflow Admin
 AIRFLOW_ADMIN_USER=admin
 AIRFLOW_ADMIN_PASSWORD=admin
+
+# Configuration de Grafana Admin
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=admin
 ```
 
 ### 3. Démarrage de l'Infrastructure
@@ -121,9 +125,11 @@ python verify_ingest.py
 
 ## 🔒 Sécurité et Rôles (C3.3)
 
-Les rôles d'accès à la base de données PostgreSQL sont créés automatiquement lors de l'initialisation du schéma :
-*   `indusflow_data_engineer` : Droits de lecture/écriture complets sur le schéma public.
-*   `indusflow_analyst`, `indusflow_manager`, `indusflow_ops`, `indusflow_auditor` : Accès en lecture seule sur les tables de l'entrepôt.
+Les rôles d'accès à la base de données PostgreSQL sont créés automatiquement lors de l'initialisation du schéma. De plus, pour chaque compte défini dans `csv/acces_utilisateurs.csv`, le pipeline Airflow crée un utilisateur de connexion PostgreSQL correspondant :
+*   **Comptes actifs avec rôle** : Un rôle de login (`LOGIN`) est créé avec le mot de passe défini par la variable d'environnement `PG_USER_DEFAULT_PASSWORD`. Ces utilisateurs sont rattachés au rôle PostgreSQL applicatif correspondant à leur fonction :
+    *   `indusflow_data_engineer` : Droits de lecture/écriture complets sur le schéma public.
+    *   `indusflow_analyst`, `indusflow_manager`, `indusflow_ops`, `indusflow_auditor` : Accès en lecture seule sur les tables de l'entrepôt.
+*   **Cas particulier (rôle vide)** : Si un utilisateur n'a pas de rôle assigné dans le CSV (comme le compte `data_eng_2`), il est automatiquement traité comme un compte inactif/désactivé et se voit configuré avec l'attribut `NOLOGIN`, sans aucun rattachement de privilèges applicatifs, et un avertissement est enregistré dans les logs d'exécution.
 
 ---
 
